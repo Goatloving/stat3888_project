@@ -1,0 +1,122 @@
+---
+title: "major project"
+author: "Yang"
+date: "2021/9/15"
+output: html_document
+---
+
+```{r}
+library(tidyverse)
+library(here)      # directory referencing
+library(readxl)    # reading Excel files
+library(janitor)   # data cleaning 
+library(stringr)   # string manipulation
+library(tidyr)     # new tidy functions
+library(knitr) # kable
+library(modi) # ok for multivariate outlier detection
+library(caret)# low variance filter
+# missing values
+library(naniar)
+library(knitr)
+library(ggpubr) # ggplot arrangement
+#ploting 
+library(gridExtra)
+library(kableExtra)
+```
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+#renv::snapshot()
+#renv::restore()
+
+```
+
+```{r}
+load("tech_data.Rdata") # load cleaned data from John's code
+```
+
+
+
+
+
+```{r}
+# select columns related to "Caffeine" and "sugar" in nutrition data
+caff_nutr <- tech_nutr %>% select(contains("CAFF"))
+sug_nutr <- tech_nutr %>% select(contains("SUG"))
+fat_nutr <- tech_nutr %>% select(contains("FAT"))
+nutr <- cbind(sug_nutr, caff_nutr, fat_nutr) # combine data
+
+
+# select columns related to "Caffeine" in food data
+caff_food <- tech_food %>% select(contains("CAFF"))
+sug_food <- tech_food %>% select(contains("SUG"))
+food <- cbind(sug_food, caff_food) # food contains much longer data so cannot be combined with the rest
+
+# select colums related to obesity from biom data
+obes_biom <- tech_biom %>% select(ABSPID, BMISC, PHDCMWBC, AGEC, EXLWTBC, EXLWMBC, EXLWVBC)
+
+# combine together
+
+dat <- cbind(obes_biom, nutr)
+# kable(miss_var_summary(tech_biom),digits=2, format="html")
+```
+
+```{r}
+dat$bmi_high <- ifelse(dat$BMISC > 30, 1, 0)
+dat$waist_high <- ifelse(dat$PHDCMWBC > 80, 1, 0)
+dat$bmi_high <- factor(dat$bmi_high)
+dat$waist_high <- factor(dat$waist_high)
+
+dat$EXLWMBC_num <- as.numeric(as.character(dat$EXLWMBC))
+
+
+
+dat$EXLWTBC_num <- as.numeric(as.character(dat$EXLWTBC))
+dat$EXLWVBC_num <- as.numeric(as.character(dat$EXLWVBC))
+dat$total_exec <- sum(dat$EXLWMBC_num, dat$EXLWTBC_num, dat$EXLWVBC_num)
+
+dat_ad19 <- dat %>% filter(dat$AGEC >= 10 & dat$AGEC <= 19) # adolescents 10-19
+
+
+dat_ad25 <- dat %>% filter(dat$AGEC >= 18 & dat$AGEC <= 25) # adolescents 18-25
+
+
+
+```
+
+
+```{r}
+
+p1<- ggplot(dat_ad25) +
+  aes(x = CAFFT1, y = SUGART1) +
+  geom_point(shape = "circle", size = 1.5, colour = "#112446") +
+  theme_minimal()
+
+
+
+p2<- ggplot(dat_ad25) +
+  aes(x = CAFFT1, y = FATT1) +
+  geom_point(shape = "circle", size = 1.5, colour = "#112446") +
+  theme_minimal()
+
+
+p3<- ggplot(dat_ad25) +
+  aes(x = CAFFT2, y = SUGART2) +
+  geom_point(shape = "circle", size = 1.5, colour = "#112446") +
+  theme_minimal()
+
+
+
+p4<- ggplot(dat_ad25) +
+  aes(x = CAFFT2, y = FATT2) +
+  geom_point(shape = "circle", size = 1.5, colour = "#112446") +
+  theme_minimal()
+
+
+
+ggarrange(p1,p2, ncol=2)
+ggarrange(p3,p4, ncol=2)
+
+```
+
