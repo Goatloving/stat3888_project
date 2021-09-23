@@ -4,8 +4,17 @@ author: "Yang"
 date: "2021/9/15"
 output: html_document
 ---
+```{r setup, include=FALSE}
+# chunk setup
+knitr::opts_chunk$set(echo = TRUE)
+# renv setup options for libraries snapshot/quickly install all packages needed: 
 
-```{r library}
+#renv::snapshot()
+#renv::restore()
+```
+
+
+```{r library, include = FALSE}
 library(tidyverse)
 library(here)      # directory referencing
 library(readxl)    # reading Excel files
@@ -34,14 +43,6 @@ library(rpart)
 library(rpart.plot)
 ```
 
-```{r setup, include=FALSE}
-# chunk setup
-knitr::opts_chunk$set(echo = TRUE)
-# renv setup options for libraries snapshot/quickly install all packages needed: 
-
-#renv::snapshot()
-#renv::restore()
-```
 
 ```{r load data}
 load("tech_data.Rdata") # load cleaned data from John's code, make sure you have the Rdata file within the working directory
