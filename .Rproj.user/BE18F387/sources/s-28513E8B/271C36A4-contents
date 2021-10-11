@@ -1,0 +1,240 @@
+---
+title: "auto process CV and CP"
+author: "Yang"
+date: "2021/10/10"
+output: 
+  html_document:
+    number_sections: true
+    toc: true
+    toc_float:
+      true
+---
+```{r setup, include=FALSE}
+library(ggplot2)
+library(tibble)
+library(tidyverse)
+library(readxl)
+library(xlsx)
+library(dplyr)
+library(kableExtra)
+```
+
+
+```{r setup, echo=FALSE} 
+# input
+#filename="C:/Users/Yang/OneDrive - UNSW/~CNT Mat/test.xlsx" # Excel file name, replace '\' with '/'
+filename="C:/Users/Yang/Downloads/CP.xlsx"
+cv_sheet="Sheet1"
+cp_sheet="Sheet1"
+
+# electrode parameters
+size=1 # electrode area in cm^2
+volume=10000000# electrode volume in cm^3
+weight=10000000 # electrode weight in g
+electrolyte="1M Na2SO4"
+
+info=data.frame(size,volume,weight,electrolyte)
+names(info)<-c("Weight (g)","Size (cm2)","Volume (cm3)","Electrolyte")
+kable(info,align='c')
+```
+
+# 1. CV Tests
+
+```{r CV conditions, include = FALSE}
+# testing parameters
+scan_rate=c(10,20,50,100,200)# CV scan rate in mV/s
+#scan_rate=c(200,100,50,25,10,5,2.5,1)# CV scan rate in mV/s
+cv_v=c(0,0.8) # CV potential window in V
+```
+
+
+```{r,include=FALSE}
+# Load data from Excel and convert it into a dataframe
+cv_result=read_excel(filename,sheet=cv_sheet)
+cv_df=data.frame(cv_result)
+rows=nrow(cv_df) # Extract the number of rows 
+cols=ncol(cv_df) # Extract the number of cols
+index=1
+col_current=c()
+col_potential=c()
+for (i in 1:cols) {
+  if (i %% 2 ==0){
+    colname=paste("Current_",scan_rate[index],sep="")
+    index<-index+1
+    col_current<-append(col_current,colname)
+  }else{
+    colname=paste("Potential_",scan_rate[index],sep="")
+    col_potential<-append(col_potential,colname)
+  }
+  names(cv_df)[i]<-colname # Change column names
+}
+
+```
+
+## CV Plots
+```{r,echo=FALSE}
+# Plot CV curves
+consequence=sort(scan_rate,decreasing=TRUE) # plot from the largest scan rate for y scale
+#point_color=c("black","red","blue","cyan","green","purple","black","red") # define colors used for plotting
+
+point_color=c("black","red","blue","cyan","green") # define colors used for plotting
+i=1
+while (i<=length(consequence)){
+  if(i==1){
+    x=paste("Potential_",consequence[i],sep="")
+    y=paste("Current_",consequence[i],sep="")
+    sub=cv_df[,c(x,y)]
+    plot(sub[,1],sub[,2],col=point_color[i],main="CV curves under various scan rates",xlab="Potential (V)",ylab="Current (mA)")
+  }else{
+    x=paste("Potential_",consequence[i],sep="")
+    y=paste("Current_",consequence[i],sep="")
+    head(sub)
+    sub=cv_df[,c(x,y)]
+    points(sub[,1],sub[,2],pch=i,col=point_color[i])
+  }
+  i=i+1
+}
+legend("topleft",legend=consequence,col=point_color,lty=1,lwd=2) # Legends
+
+
+area=vector(length=length(scan_rate))
+charge=vector(length=length(scan_rate))
+cap=vector(length=length(scan_rate))
+rate_sqrt=sqrt(scan_rate) # v^0.5
+rate_inv_sqrt=1/scan_rate # v^-0.5
+charge_inv=charge
+
+# self-defined myTrapz function to calculate area of enclosed curves
+myTrapz <- function (x, y) {
+  assertthat::assert_that(length(x) == (length(y) -> n), msg = 'x, y must be equal length')
+  intervals <- diff(x)
+  area <- 0
+  for (i in 1:(n-1)) {
+    if (is.na(x[i+1]))  return (area)
+    if (is.na(y[i+1]))  return (area)
+    area <- area + intervals[i] * 0.5 * (y[i] + y[i+1])
+  }
+  return(area)
+}
+
+#Calculating area
+i=1
+while(i<=length(area)){
+  voltage = paste("Potential_",scan_rate[i],sep="")
+  current = paste("Current_",scan_rate[i],sep="")
+  sub=subset(cv_df,select=c(voltage,current))
+  area[i]=myTrapz(sub[,1],sub[,2])
+  cap[i]=area[i]/(2*abs((cv_v[2]-cv_v[1]))*scan_rate[i]/1000) #capacitance in mF
+  charge[i]=cap[i]*(cv_v[2]-cv_v[1]) # charge in mC
+  charge_inv[i]=1/charge[i]
+  i=i+1
+}
+
+plot(scan_rate, cap,xlab = "Scan Rate (mV/s)",ylab="Capacitance (mF)",pch=19,col='red',main="Scan Rate vs. Capacitance")
+lines(scan_rate,cap,lty='dashed',col='red')
+
+```
+
+## CV Results
+```{r,echo=FALSE}
+cap_table=data.frame(scan_rate,area,cap,cap/weight/1000,cap/size,cap/volume/1000,rate_inv_sqrt,charge,rate_sqrt,charge_inv)
+
+names(cap_table)<-c("Scan Rate (mV/s)","Intigration Area (mA*V)","Capacitance (mF)","Gravimetric Capacitance (F/g)","Areal Capacitance (mF/cm2)","Volumetric Capacitance (F/cm3)","1/(Rate^2)","Charge","Rate^2","1/Charge")  
+
+cap_table=cap_table %>% mutate_if(is.numeric,round,digit=2)
+
+sub_cap_table=cap_table %>%
+  select(c("Scan Rate (mV/s)","Intigration Area (mA*V)","Capacitance (mF)","Gravimetric Capacitance (F/g)","Areal Capacitance (mF/cm2)","Volumetric Capacitance (F/cm3)"))
+
+kable(sub_cap_table,align='c',round=7)
+
+write.xlsx(sub_cap_table, file="output.xlsx")
+
+```
+
+## CV Capacitive Contribution (Surface/Bulk)
+
+```{r,echo=FALSE}
+reg_total=lm(data=cv_df,formula=charge_inv~rate_sqrt)
+reg_outer=lm(data=cv_df,formula=charge~rate_inv_sqrt)
+
+equation_total=paste("Intercept = ",reg_total$coefficients[1],"Total Capacitance = ", 1/reg_total$coefficients[1])
+
+equation_outer=paste("Intercept = ",reg_outer$coefficients[1],"Outer Capacitance = ", reg_outer$coefficients[1])
+
+par(mfrow=c(1,2))
+plot(rate_sqrt,charge_inv, main="Total Capacitance")
+lines(rate_sqrt,reg_total$coefficients[2]*rate_sqrt+reg_total$coefficients[1],lty='dashed', col='red')
+
+plot(rate_inv_sqrt,charge, main="Outer Capacitance")
+lines(rate_inv_sqrt,reg_outer$coefficients[2]*rate_inv_sqrt+reg_outer$coefficients[1],lty='dashed',col='blue')
+
+
+```
+
+
+# CP Tests
+
+## CP Conditions
+
+```{r}
+cp_i=c(80,60,40,20,10) # Absolute value of CP current in mA
+cp_v=c(0,0.8) # Potential window of CP in V
+```
+
+## CP Plots
+
+```{r cp plots echo=FALSE}
+cp_result=read_excel(filename,sheet=cp_sheet)
+cp_df=data.frame(cp_result)
+
+# generate tidy version data
+for (i in 1:length(cp_i)){
+  new_sub_df_name = paste0("subframe", i)
+  sub = cp_df[,(2*i-1):(2*i)]
+  names(sub)<-c("time", "potential")
+  sub[,1]=sub[,1]-sub[1,1]
+  sub<-na.omit(sub)
+  sub<-mutate(sub, current = cp_i[i])
+  sub$current=as.factor(sub$current)
+  assign(new_sub_df_name, sub)
+}
+tidy_dat<-rbind(subframe1,subframe2,subframe3,subframe4,subframe5)
+
+
+# plot data
+ggplot(data = tidy_dat, aes(x=time, y=potential, color = current))+
+  geom_point(size=1)+
+  geom_line(aes(group=current),size=1.5)+
+  theme_bw()
+
+
+# calculation
+cp_results <- as.data.frame(matrix(nrow = length(cp_i), ncol=5))
+names(cp_results)<-c("Current","Capacitance","Areal","Weight","Volume")
+
+for (i in 1:length(cp_i)){
+  a<-tidy_dat[which(tidy_dat$current==cp_i[i]),]
+  max_potential<-max(a$potential)
+  max_time<-tidy_dat[which(tidy_dat$potential==max_potential),]$time
+  last_index<-nrow(a)
+  min_time<-a[last_index,1]
+  cap_cp <- (min_time-max_time)*cp_i[i]/(cp_v[2]-cp_v[1])/1000
+  cp_results[i,1]=cp_i[i]
+  cp_results[i,2]=cap_cp
+  cp_results[i,3]=cap_cp/size
+  cp_results[i,4]=cap_cp/weight
+  cp_results[i,5]=cap_cp/volume
+  
+}
+
+ggplot(data=cp_results, aes(x=Current, y=Capacitance))+
+  geom_point()+
+  geom_line()
+
+
+kable(cp_results,digits =3)
+
+```
+
+

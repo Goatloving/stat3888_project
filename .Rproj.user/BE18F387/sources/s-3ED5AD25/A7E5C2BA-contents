@@ -1,0 +1,94 @@
+---
+title: "major_project_3"
+output: html_document
+---
+
+```{r library}
+library(tidyverse)
+#library(here)      # directory referencing
+#library(readxl)    # reading Excel files
+#library(janitor)   # data cleaning 
+#library(stringr)   # string manipulation
+library(tidyr)     # new tidy functions
+library(knitr) # kable
+#library(modi) # ok for multivariate outlier detection
+library(caret)# low variance filter
+# missing values
+#library(naniar)
+#library(knitr)
+#library(ggpubr) # ggplot arrangement
+#ploting 
+library(gridExtra)
+library(kableExtra)
+#outlier
+#library(univOutl)
+# tree methods
+#library(tourr)
+#library(RColorBrewer)
+#library(plotly)
+#library(htmltools)
+library(performanceEstimation)# for SMOTE
+library(rpart)
+library(rpart.plot)
+library(Rtsne)
+library(randomForest)
+library(neuralnet)
+library(e1071)# SVM regression
+```
+
+
+```{r load data}
+load("tech_data.Rdata") # load cleaned data from John's code, make sure you have the Rdata file within the working directory
+```
+
+```{r dataset fliter}
+dat<-tech_biom %>% filter (AGEC >= 19, AGEC<=64, SMKSTAT==5)  # filter age and smoke status
+var_list<-c("BMISC","SEX","AGEC","DIABBC","HCHOLBC","HSUGBC","HYPBC", "SYSTOL","DIASTOL","TRIGRESB","FOLATREB","CHOLRESB","LDLRESB","HBA1PREB","GLUCFREB","ALTRESB","HDLCHREB") # add/remove variables that are interested
+dat2<-dat %>% select (var_list) # select columns that we are interested
+str(dat2) # 3488 obs x 13 variables
+```
+
+```{r creat obesity scores}
+# dat3 contains obesity scores that are manually created for 4 diseases
+# the higher score the more likely to be obesity
+
+dat3<-dat2 %>% mutate(
+  dia_score= ifelse(DIABBC==5, 0, ifelse(DIABBC==3, 1, ifelse(DIABBC==2, 2, ifelse(DIABBC==1, 3, NA)))),
+  cho_score= ifelse(HCHOLBC==5, 0, ifelse(HCHOLBC==3, 1, ifelse(HCHOLBC==2, 2, ifelse(HCHOLBC==1, 3, NA)))),
+  sug_score= ifelse(HSUGBC==5, 0, ifelse(HSUGBC==3, 1, ifelse(HSUGBC==2, 2, ifelse(HSUGBC==1, 3, NA)))),
+  hyp_score= ifelse(HYPBC==5, 0, ifelse(HYPBC==3, 1, ifelse(HYPBC==2, 2, ifelse(HYPBC==1, 3, NA)))),
+  final_score = dia_score+cho_score+sug_score+hyp_score
+)
+
+hist(dat3$final_score) # the final score is highly unbalanced
+nrow(dat3[which(dat3$final_score==0),]) # the final score of 2790 observations are 0
+
+```
+```{r k-fold cross-validation for linear regression }
+# Predict dia_score, drop other y and y-related variables
+dat4<-subset(dat3, select=-c(DIABBC, HCHOLBC, HSUGBC, HYPBC, cho_score, sug_score, hyp_score, final_score)) 
+# remove NA values
+dat4<-na.omit(dat4)
+# set up k value for k-fold cross validation 
+k_fold=10
+# create k folds
+folds<-createFolds(y=dat4$dia_score, k=k_fold)
+# create a new vector to record test results
+test_error_RMSE<-c() 
+
+# K-fold cross-validation:
+for (i in 1:k_fold){
+  fold_test<-dat4[folds[[i]],] # select folds[[i]] as test test
+  fold_train<-dat4[-folds[[i]],] # remaining is training set
+  # linear regression using AIC
+  M1<-lm(dia_score~., data=fold_train) # full model
+  M0<-lm(dia_score~1, data=fold_train) # null model
+  lm_model<-step(M1, scope=list(lower=M0, upper=M1),direction='backward', k=2) # backward selection from full model to null model
+  fold_predict<-predict(lm_model, type='response', newdata=fold_test) # predict y
+  test_error_RMSE[i] = RMSE(fold_predict, fold_test$dia_score) # calculate and record RMSE
+}
+
+avg_RMSE<-sum(test_error_RMSE)/k_fold
+avg_RMSE
+```
+
