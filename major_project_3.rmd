@@ -34,6 +34,8 @@ library(Rtsne)
 library(randomForest)
 library(neuralnet)
 library(e1071)# SVM regression
+library(mltools)
+library(data.table)
 ```
 
 
@@ -91,4 +93,38 @@ for (i in 1:k_fold){
 avg_RMSE<-sum(test_error_RMSE)/k_fold
 avg_RMSE
 ```
+
+
+```{r neural network}
+# we use dat3 as a starting point for neural network analysis
+dat5=dat3
+# normalize all numeric variables
+mystd <-function (x){
+  x<- (x-mean(x, na.rm=TRUE))/sd(x, na.rm=TRUE)
+}
+# remove NA
+dat5<-na.omit(dat5)
+# normalize numeric values in dat5 such that they have mean value = 0 and std = 1
+dat5_std<-dat5%>% mutate_if(is.numeric, list(mystd))
+# create dataset with one hot encoding
+dat5_one_hot <- one_hot(as.data.table(dat5_std))
+
+# set up k value for k-fold cross validation 
+k_fold=10
+# create k folds
+folds<-createFolds(y=dat5_one_hot$dia_score, k=k_fold)
+test_error_RMSE<-c() 
+
+for (i in 1:k_fold){
+  fold_test<-dat5_one_hot[folds[[i]],] # select folds[[i]] as test test
+  fold_train<-dat5_one_hot[-folds[[i]],] # remaining is training set
+  network<-neuralnet(dia_score~.-final_score-cho_score-sug_score-hyp_score, data=fold_train, hidden =3)
+  fold_predict<-predict(network, fold_test)
+  test_error_RMSE[i]<-RMSE(fold_predict, fold_test$dia_score) # calculate and record RMSE
+}
+
+avg_RMSE<-sum(test_error_RMSE)/k_fold
+avg_RMSE
+```
+
 

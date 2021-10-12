@@ -92,3 +92,20 @@ avg_RMSE<-sum(test_error_RMSE)/k_fold
 avg_RMSE
 ```
 
+
+```{r neural network }
+mystd<-function(x){
+  x<-(x-mean(x, na.rm=TRUE)/sd(x, na.rm=TRUE))
+}
+
+dat4_neural <- dat4 %>% 
+  mutate_if(is.numeric, list(mystd))
+
+dat4_neural
+res<-neuralnet(dia_score~BMISC+AGEC+SYSTOL+DIASTOL, data=dat4_neural, hidden =3)
+
+res$result.matrix
+plot(res)
+```
+
+
