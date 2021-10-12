@@ -30,6 +30,7 @@ library(kableExtra)
 library(performanceEstimation)# for SMOTE
 library(rpart)
 library(rpart.plot)
+library(rattle) #fancyRpartPlot
 library(Rtsne)
 library(randomForest)
 library(neuralnet)
@@ -95,7 +96,7 @@ avg_RMSE
 ```
 
 
-```{r neural network}
+```{r k-fold cv for neural network}
 # we use dat3 as a starting point for neural network analysis
 dat5=dat3
 # normalize all numeric variables
@@ -111,20 +112,57 @@ dat5_one_hot <- one_hot(as.data.table(dat5_std))
 
 # set up k value for k-fold cross validation 
 k_fold=10
+# set number of hiddne layers
+hid_layer=5
 # create k folds
 folds<-createFolds(y=dat5_one_hot$dia_score, k=k_fold)
+
 test_error_RMSE<-c() 
 
 for (i in 1:k_fold){
   fold_test<-dat5_one_hot[folds[[i]],] # select folds[[i]] as test test
   fold_train<-dat5_one_hot[-folds[[i]],] # remaining is training set
-  network<-neuralnet(dia_score~.-final_score-cho_score-sug_score-hyp_score, data=fold_train, hidden =3)
+  network<-neuralnet(dia_score~.-final_score-cho_score-sug_score-hyp_score, data=fold_train, hidden =hid_layer)
   fold_predict<-predict(network, fold_test)
   test_error_RMSE[i]<-RMSE(fold_predict, fold_test$dia_score) # calculate and record RMSE
 }
 
 avg_RMSE<-sum(test_error_RMSE)/k_fold
 avg_RMSE
+```
+
+
+```{r random forest}
+dat6 = dat3
+dat6<-na.omit(dat6)
+
+# set up k value for k-fold cross validation 
+k_fold=10
+# set number of hiddne layers
+hid_layer=5
+# create k folds
+folds<-createFolds(y=dat5_one_hot$dia_score, k=k_fold)
+
+test_error_RMSE<-c() 
+
+for (i in 1:k_fold){
+  fold_test<-dat6[folds[[i]],] # select folds[[i]] as test test
+  fold_train<-dat6[-folds[[i]],] # remaining is training set
+  rf<-randomForest(dia_score ~ .-final_score-cho_score-sug_score-hyp_score, data=fold_train, ntree=100)
+  fold_predict<-predict(rf, fold_test)
+  test_error_RMSE[i]<-RMSE(fold_predict, fold_test$dia_score) # calculate and record RMSE
+}
+avg_RMSE<-sum(test_error_RMSE)/k_fold
+avg_RMSE
+
+# fit using a single tree
+rp<-rpart(dia_score~.-final_score-cho_score-sug_score-hyp_score, 
+      data = dat6,
+      control=rpart.control(cp=0.0001, minsplit=5)
+      )
+
+fancyRpartPlot(rp,palettes=c("Oranges"), main="Dia_score Prediction")
+
 ```
 
 
