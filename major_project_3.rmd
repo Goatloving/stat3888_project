@@ -136,6 +136,10 @@ avg_RMSE
 dat6 = dat3
 dat6<-na.omit(dat6)
 
+print(table(dat6$dia_score))
+
+library(DWmR)
+
 # set up k value for k-fold cross validation 
 k_fold=10
 # set number of hiddne layers
