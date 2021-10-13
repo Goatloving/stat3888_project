@@ -15,7 +15,10 @@ library(knitr) # kable
 library(caret)# low variance filter
 # missing values
 #library(naniar)
+library(glmnet) # lasso regression
 #library(knitr)
+library(ggplot2)
+library(GGally)
 #library(ggpubr) # ggplot arrangement
 #ploting 
 library(gridExtra)
@@ -208,13 +211,15 @@ smote.exs <- function(data,tgt,N,k)
 
 
 
-```{r smote}
+```{r smote} 
+# synthetic minority oversampling technique
+
 dat33<-dat3[,1:17] # do NOT include DIABBC and sores other than dia_score
 dat33<-na.omit(dat33)
 table(dat33$DIABBC)
 
 
-dat33.balanced <-smote(DIABBC~., dat33, perc.over=600, perc.under=2)
+dat33.balanced <-smote(DIABBC~., dat33, perc.over=600, perc.under=100)
 table(dat33.balanced$DIABBC)
 
 
@@ -250,15 +255,10 @@ predict_class<-predict(model,newdata=test.data)
 length(predict_class)
 length(test.data$DIABBC)
 
-summ(model)
+model
 data.frame(predict_class)
-
 table(predict_class, test.data$dia_score)
-
 mean(predict_class==test.data$dia_score)
-
-
-
 
 
 training.samples <- dat33$DIABBC %>%
@@ -266,13 +266,11 @@ training.samples <- dat33$DIABBC %>%
 train.data  <- dat33[training.samples, ]
 test.data <- dat33[-training.samples, ]
 
-model<-nnet::multinom(DIABBC~., data=train.data)
+model<-nnet::multinom(dia_score~., data=train.data)  # multiclass logsitic regression model
 
-
+model
 predict_class<-predict(model, newdata=test.data)
 table(predict_class, test.data$DIABBC)
-
-
 
 mean(predict_class==test.data$DIABBC)
 
@@ -426,4 +424,96 @@ fancyRpartPlot(rp,palettes=c("Oranges"), main="Dia_score Prediction")
 
 ```
 
+# Kaggle body fat dataset
+
+```{r kaggle dataset}
+kdat<-read.csv("bodyfat.csv")
+ggpairs(kdat)
+
+skim(kdat)
+```
+
+```{r kaggle lasso regression}
+
+x_var <- model.matrix(BodyFat~., kdat)[,-2]
+y_var<-kdat$BodyFat
+
+
+set.seed(2021)
+train<-sample(1:nrow(x_var), nrow(x_var)/2)
+x_train<-x_var[train,]
+y_train<-y_var[train]
+
+x_test<-x_var[-train,]
+y_test<-y_var[-train]
+
+# lambda
+lambda_seq<-10^seq(2,-2,by=-.1)
+
+cv_output<-cv.glmnet(x_train, y_train, alpha = 1, lambda=lambda_seq)
+
+best_lam<-cv_output$lambda.min
+
+lasso_best<-glmnet(x_train, y_train, alpha = 1, lambda=best_lam)
+
+coef(lasso_best)
+
+preds<-predict(lasso_best, s=best_lam, newx=x_test)
+rss<-sum((preds-y_test)^2)
+tss<-sum((y_test-mean(y_test))^2)
+rsq<-1-rss/tss
+
+
+rss
+tss
+rsq
+```
+```{r kaggle ridge regression}
+set.seed(2021)
+kdat_for_ahs<-kdat[,c(1:5,8)]
+
+x_var <- model.matrix(BodyFat~., kdat_for_ahs)[,-2]
+x_var
+x_var
+
+y_var<-kdat$BodyFat
+
+train<-sample(1:nrow(x_var), nrow(x_var)/2)
+x_train<-x_var[train,]
+y_train<-y_var[train]
+
+x_test<-x_var[-train,]
+y_test<-y_var[-train]
+
+# lambda
+lambda_seq<-10^seq(2,-2,by=-.1)
+
+cv_output<-cv.glmnet(x_train, y_train, alpha = 0, lambda=lambda_seq)
+
+best_lam<-cv_output$lambda.min
+
+lasso_best<-glmnet(x_train, y_train, alpha = 0, lambda=best_lam)
+
+coef(lasso_best)
+
+preds<-predict(lasso_best, s=best_lam, newx=x_test)
+rss<-sum((preds-y_test)^2)
+tss<-sum((y_test-mean(y_test))^2)
+rsq<-1-rss/tss
+rss
+tss
+rsq
+```
+
+
+Assume we use the above equation in AHS data
+The equation would be BodyFat = -50.83-0.006(Age)-0.104(Weight, lbs)+0.032(Height)+0.939(Waist/Abdomen)
+
+```{r apply kaggle model in AHS}
+BFD<- -0.006*dat$AGEC-0.104*dat$PHDKGWBC/0.45359237+0.032*dat$PHDCMHBC +0.939*dat$PHDCMWBC # need to convert kg to lbs
+
+kdat2 <-cbind(dat3, BFD)
+kdat2
+
+```
 
