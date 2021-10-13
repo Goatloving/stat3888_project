@@ -39,8 +39,6 @@ library(mltools)
 library(data.table)
 library(skimr)
 library(smotefamily)
-library(broom)
-library(jtools)
 ```
 
 
@@ -214,76 +212,25 @@ dat33<-na.omit(dat33)
 table(dat33$DIABBC)
 
 
-dat33.balanced <-smote(DIABBC~., dat33, perc.over=600, perc.under=2)
+dat33.balanced <-smote(DIABBC~., dat33, perc.over=200, perc.under=2)
 table(dat33.balanced$DIABBC)
 
 
 dat33.balanced<-dat33.balanced %>% mutate(
-  dia_score= ifelse(DIABBC==5, 0, 1),
+  dia_score= ifelse(DIABBC==5, 0, ifelse(DIABBC==3, 1, ifelse(DIABBC==2, 2, ifelse(DIABBC==1, 3, NA)))),
 )
 
-dat33.balanced$dia_score<-as.factor(dat33.balanced$dia_score)
 
-
-# 
-# 
-# dat33.balanced<-dat33.balanced[,-4]
-# dat33.balanced
-# 
-# model<-lm(dia_score~., data=dat33.balanced)
-
-
-set.seed(2021)
-training.samples <- dat33.balanced$dia_score %>% 
-  createDataPartition(p = 0.8, list = FALSE)
-train.data  <- dat33.balanced[training.samples, ]
-test.data <- dat33.balanced[-training.samples, ]
-
+dat33.balanced<-dat33.balanced[,-4]
 dat33.balanced
 
-#model<-nnet::multinom(dia_score~.-DIABBC, data=train.data)
-model<-nnet::multinom(dia_score~.-DIABBC, family=binomial, data=train.data)
-predict_class<-predict(model,newdata=test.data)
 
-
-
-length(predict_class)
-length(test.data$DIABBC)
-
-summ(model)
-data.frame(predict_class)
-
-table(predict_class, test.data$dia_score)
-
-mean(predict_class==test.data$dia_score)
-
-
-
-
-
-training.samples <- dat33$DIABBC %>%
-  createDataPartition(p = 0.8, list = FALSE)
-train.data  <- dat33[training.samples, ]
-test.data <- dat33[-training.samples, ]
-
-model<-nnet::multinom(DIABBC~., data=train.data)
-
-
-predict_class<-predict(model, newdata=test.data)
-table(predict_class, test.data$DIABBC)
-
-
-
-mean(predict_class==test.data$DIABBC)
-
-# 
-# summary(model)
 ```
 
 ```{r smote-k-fold cross-validation for linear regression }
 set.seed(2021)
 # Predict dia_score, drop other y and y-related variables
-dat4<-subset(dat3, select=-c(DIABBC, HCHOLBC, HSUGBC, HYPBC, cho_score, sug_score, hyp_score, final_score)) 
+dat4<-dat33.balanced
 # str(dat4)
 # dat44<-dat4[dat4$dia_score>0,]
 # str(dat44)
